@@ -812,27 +812,30 @@ procedure Element_Processing is
    CONTEXT_UNIT_NOT_FOUND_MESSAGE : constant String_Type := "Context does not contain the requested unit: ";
    CONTEXT_UNIT_FOUND_MESSAGE : constant String_Type := "Context contains the requested unit: ";
    STATUS_VALUE_MESSAGE : constant String_Type := "Status Value is ";
-
-   My_Context              : Asis.Context;
-   My_Unit                    : Asis.Compilation_Unit;
-   Unit_Name                  : Wide_String ( 1 .. 100 );
-   Unit_Name_Length           : Natural;
-   Path_Name                  : Wide_String ( 1 .. 100 );
-   Path_Name_Length           : Natural;
+   subtype Info is Natural;
 
    procedure Pre_Procedure
      (Element   : in     Asis.Element;
       Control   : in out Asis.Traverse_Control;
-      State     : in out Boolean);
+      State     : in out Info);
 
    procedure Post_Procedure
      (Element   : in     Asis.Element;
       Control   : in out Asis.Traverse_Control;
-      State     : in out Boolean);
+      State     : in out Info);
 
-   procedure Traverse_Tree is new
-     Asis.Iterator.Traverse_Element
-     (Boolean, Pre_Procedure, Post_Procedure);
+   procedure Traverse is new Asis.Iterator.Traverse_Element
+     (Info, Pre_Procedure, Post_Procedure);
+
+   My_Context       : Asis.Context;
+   My_Unit          : Asis.Compilation_Unit;
+   My_Declaration   : Asis.Declaration;
+   Unit_Name        : Wide_String ( 1 .. 100 );
+   Unit_Name_Length : Natural;
+   Path_Name        : Wide_String ( 1 .. 100 );
+   Path_Name_Length : Natural;
+   The_Control      : Asis.Traverse_Control := Asis.Continue;
+   The_Info         : Natural := 0;
 
    procedure Print_Result (Result : in Asis.Element; Name : BOUNDED_STRING; Index : Integer) is
       use Asis, Asis.Elements, Asis.Text;
@@ -860,16 +863,16 @@ procedure Element_Processing is
          end if;
          New_Line;
          Put_Line(Trim(Element_Image(Result), Both));
-      else
-         Put(">>> Not_An_Element : --- ");
-         Display(Name);
-         New_Line;
+      --else
+      --   Put(">>> Not_An_Element : --- ");
+      --   Display(Name);
+      --   New_Line;
       end if;
    end Print_Result;
 
    procedure Pre_Procedure (Element : in Asis.Element;
                             Control    : in out Asis.Traverse_Control;
-                            State      : in out Boolean) is
+                            State      : in out Info) is
       use Asis, Asis.Elements, Asis.Expressions, Asis.Text;
       use Ada.Strings, Ada.Strings.Wide_Fixed;
       use Utilities;
@@ -878,6 +881,7 @@ procedure Element_Processing is
       Arg_Span : Span := Element_Span(Element);
 
    begin -- Pre_Procedure
+      State := State + 1;
 
       Put_Line(--Unit_Name(1 .. Unit_Name_Length) & ":" &
                "<<< " &
@@ -937,31 +941,12 @@ procedure Element_Processing is
 
    procedure Post_Procedure (Element : in Asis.Element;
                              Control    : in out Asis.Traverse_Control;
-                             State      : in out Boolean) is
+                             State      : in out Info) is
       use Asis, Asis.Elements, Asis.Expressions;
       use Utilities;
    begin -- Post_Procedure
-      null;
+      State := State - 1; --Comment this line to further traverse with'ed
    end Post_Procedure;
-
-   procedure Process_Unit (Unit : in Asis.Compilation_Unit) is
-      use Ada.Characters.Handling;
-      Control : Asis.Traverse_Control := Asis.Continue;
-      State   : Boolean := True;
-
-   begin
-
-      case Asis.Compilation_Units.Unit_Origin (Unit) is
-         when Asis.An_Application_Unit =>
-            Put_Line ("Processing Unit: " &
-                        Asis.Compilation_Units.Unit_Full_Name(Unit));
-            New_Line;
-            Traverse_Tree (Asis.Elements.Unit_Declaration(Unit), Control, State);
-         when others =>
-            null;
-      end case;
-
-   end Process_Unit;
 
 begin -- Rorg_Analysis
 
@@ -1001,31 +986,18 @@ begin -- Rorg_Analysis
    My_Unit := Asis.Compilation_Units.Compilation_Unit_Body
      ( Unit_Name ( 1 .. Unit_Name_Length), My_Context );
 
-   if Asis.Compilation_Units.Is_Nil ( My_Unit )
-   then
-      Put (CONTEXT_UNIT_NOT_FOUND_MESSAGE);
-      Put (Unit_Name ( 1 .. Unit_Name_Length));
-      New_Line;
-   else
-      Put (CONTEXT_UNIT_FOUND_MESSAGE);
-      Put (Unit_Name ( 1 .. Unit_Name_Length));
-      New_Line;
-      Process_Unit(My_Unit);
-      --Post_Process_Unit;
-      New_Line;
-   end if;
+   declare
+      My_CC_List : constant Asis.Context_Clause_List
+        := Asis.Elements.Context_Clause_Elements (Compilation_Unit => My_Unit,
+                                    Include_Pragmas  => True) ;
+   begin
+      for I in My_CC_List'Range loop
+         Traverse (My_CC_List (I), The_Control, The_Info);
+      end loop;
+   end;
 
-   My_Unit := Asis.Compilation_Units.Library_Unit_Declaration
-     ( Unit_Name ( 1 .. Unit_Name_Length), My_Context );
-
-   if not Asis.Compilation_Units.Is_Nil ( My_Unit ) then
-      Put (CONTEXT_UNIT_FOUND_MESSAGE);
-      Put (Unit_Name ( 1 .. Unit_Name_Length));
-      New_Line;
-      Process_Unit(My_Unit);
-      --Post_Process_Unit;
-      New_Line;
-   end if;
+   My_Declaration := Asis.Elements.Unit_Declaration (My_Unit);
+   Traverse (My_Declaration, The_Control, The_Info);
 
    Asis.Ada_Environments.Close (My_Context);
    Asis.Ada_Environments.Dissociate (My_Context);
