@@ -3,4 +3,6 @@
 *.ali
 b~*
 *~
+\#*
+\.\#*
 element_processing
