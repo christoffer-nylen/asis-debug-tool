@@ -1,0 +1,6 @@
+*.adt
+*.o
+*.ali
+b~*
+*~
+element_processing
