@@ -29,34 +29,35 @@ with
   Asis.Statements,
   Asis.Text;
 
---Data structures
---with
---Stack_Array;
-
 --Adalog
 with
-  Thick_Queries;
+  Thick_Queries,
+  Utilities;
 
 with
   Context_Arguments;
 
--- Adalog
-with
-  Utilities;
-
 procedure Element_Processing is
 
-   type Access_Element_In_Context_Out is access function (Element : Asis.Element) return Asis.Context;
-   type Access_Element_In_Element_Out is access function (Element : Asis.Element) return Asis.Element;
-   type Access_Element_In_Element_List_Out is access function (Element : Asis.Element) return Asis.Element_List;
-   type Access_Element_In_Compilation_Unit_Out is access function (Element : Asis.Element) return Asis.Compilation_Unit;
-   type Access_Element_In_Compilation_Unit_List_Out is access function (Element : Asis.Element) return Asis.Compilation_Unit_List;
+   type Access_Element_In_Context_Out is
+     access function (Element : Asis.Element) return Asis.Context;
+   type Access_Element_In_Element_Out is
+     access function (Element : Asis.Element) return Asis.Element;
+   type Access_Element_In_Element_List_Out is
+     access function (Element : Asis.Element) return Asis.Element_List;
+   type Access_Element_In_Compilation_Unit_Out is
+     access function (Element : Asis.Element) return Asis.Compilation_Unit;
+   type Access_Element_In_Compilation_Unit_List_Out is
+     access function (Element : Asis.Element) return Asis.Compilation_Unit_List;
+   type Access_Element_In_Type_Kind_Out is
+     access function (Element : Asis.Element) return Asis.Type_Kinds;
 
    type Function_Return_Type is (A_Context,
                                  An_Element,
                                  An_Element_List,
                                  A_Compilation_Unit,
-                                 A_Compilation_Unit_List);
+                                 A_Compilation_Unit_List,
+                                 A_Type_Kind);
 
    type Access_Function_Multi_Element (Kind : Function_Return_Type := An_Element) is
       record
@@ -72,6 +73,8 @@ procedure Element_Processing is
                Compilation_Unit : Access_Element_In_Compilation_Unit_Out;
             when A_Compilation_Unit_List =>
                Compilation_Unit_List : Access_Element_In_Compilation_Unit_List_Out;
+            when A_Type_Kind =>
+               Type_Kind : Access_Element_In_Type_Kind_Out;
          end case;
       end record;
 
@@ -84,10 +87,12 @@ procedure Element_Processing is
          Name : BOUNDED_STRING;
       end record;
 
-   --type Asis_Query_Arr is array (Integer range <>) of Asis_Query;
-
    Asis_Functions : array (Integer range <>) of Asis_Query
      := (--Asis.Elements
+         ((Kind => A_Type_Kind,
+           Option => A_Type_Kind,
+           Type_Kind => Asis.Elements.Type_Kind'Access),
+          To_Bounded_String("Asis.Elements.Type_Kind")),
          ((Kind => An_Element,
            Option => An_Element,
            Element => Asis.Elements.Enclosing_Element'Access),
@@ -794,6 +799,10 @@ procedure Element_Processing is
            Option => An_Element,
            Element => Thick_Queries.Ultimate_Expression_Type'Access),
           To_Bounded_String("Thick_Queries.Ultimate_Expression_Type")),
+         ((Kind => A_Type_Kind,
+           Option => A_Type_Kind,
+           Type_Kind => Thick_Queries.Expression_Type_Kind'Access),
+          To_Bounded_String("Thick_Queries.Expression_Type_Kind")),
          ((Kind => An_Element,
            Option => An_Element,
            Element => Thick_Queries.Called_Simple_Name'Access),
@@ -810,8 +819,8 @@ procedure Element_Processing is
 
    subtype String_Type is Wide_String;
    CONTEXT_UNIT_NOT_FOUND_MESSAGE : constant String_Type := "Context does not contain the requested unit: ";
-   CONTEXT_UNIT_FOUND_MESSAGE : constant String_Type := "Context contains the requested unit: ";
-   STATUS_VALUE_MESSAGE : constant String_Type := "Status Value is ";
+   CONTEXT_UNIT_FOUND_MESSAGE     : constant String_Type := "Context contains the requested unit: ";
+   STATUS_VALUE_MESSAGE           : constant String_Type := "Status Value is ";
    subtype Info is Natural;
 
    procedure Pre_Procedure
@@ -836,6 +845,26 @@ procedure Element_Processing is
    Path_Name_Length : Natural;
    The_Control      : Asis.Traverse_Control := Asis.Continue;
    The_Info         : Natural := 0;
+
+   procedure Print_Result (Result : in Asis.Type_Kinds; Name : BOUNDED_STRING) is
+      use Asis, Asis.Elements, Asis.Text;
+      use Ada.Strings, Ada.Strings.Wide_Fixed;
+
+      procedure Display(Name : BOUNDED_STRING) is
+         use Ada.Characters.Handling;
+      begin
+         Put(To_Wide_String(To_String(Name)));
+      end;
+
+   begin
+
+      New_Line;
+      Put(">>> --- ");
+      Display(Name);
+      New_Line;
+      Put_Line(Trim(Asis.Type_Kinds'Wide_Image(Result), Both));
+
+   end Print_Result;
 
    procedure Print_Result (Result : in Asis.Element; Name : BOUNDED_STRING; Index : Integer) is
       use Asis, Asis.Elements, Asis.Text;
@@ -886,7 +915,8 @@ procedure Element_Processing is
       Put_Line(--Unit_Name(1 .. Unit_Name_Length) & ":" &
                "<<< " &
                  Trim(Natural'Wide_Image(Arg_Span.First_Line),Both) & ":" &
-                 Trim(Natural'Wide_Image(Arg_Span.First_Column), Both) & ":");
+                 Trim(Natural'Wide_Image(Arg_Span.First_Column), Both) & ":" &
+                 Asis.Element_Kinds'Wide_Image(Element_Kind(Element)));
       Put_Line(Trim(Element_Image(Element), Both));
 
       for I in Asis_Functions'Range loop
@@ -928,6 +958,12 @@ procedure Element_Processing is
                         null;
                         --Print_Result(Result(J), Asis_Functions(I).Name, J);
                      end loop;
+                  end;
+               when A_Type_Kind =>
+                  declare
+                     Result : Asis.Type_Kinds := Asis_Functions(I).Call.Type_Kind((Element));
+                  begin
+                     Print_Result(Result, Asis_Functions(I).Name);
                   end;
             end case;
          exception

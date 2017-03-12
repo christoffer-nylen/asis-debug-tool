@@ -5,4 +5,5 @@ b~*
 *~
 \#*
 \.\#*
-element_processing
+bin/
+obj/
